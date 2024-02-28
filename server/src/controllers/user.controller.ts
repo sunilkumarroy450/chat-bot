@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import userModel from "../models/user.model.js";
-import { hash } from "bcrypt";
+import { hash, compare } from "bcrypt";
+import { generateToken } from "../utils/generateToken.js";
 
 export const get_user = async (
   req: Request,
@@ -41,11 +42,24 @@ export const login_user = async (
   next: NextFunction
 ) => {
   try {
-    const { name, email, password } = req.body;
-    const hashedPassword = await hash(password, 10);
-    const user = new userModel({ name, email, password: hashedPassword });
-    await user.save();
-    return res.status(201).send({ msg: "User Created Successfully", user });
+    const { email, password } = req.body;
+    const user = await userModel.findOne({ email });
+    if (!user) return res.status(401).send({ msg: "User not registered" });
+    //compare password
+    const isPasswordCorrect = await compare(password, user.password);
+    if (!isPasswordCorrect)
+      return res.status(403).send({ msg: "Incorrect Password" });
+    const token = generateToken(user._id.toString(), user.email, "7days");
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 7);
+    res.cookie("auth_token", token, {
+      path: "/",
+      domain: "localhost",
+      expires,
+      httpOnly: true,
+      signed: true,
+    });
+    return res.status(200).send({ msg: "User login successfully" });
   } catch (error) {
     console.log(error);
     return res.status(500).send({ error, msg: error.message });
