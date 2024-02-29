@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import userModel from "../models/user.model.js";
 import { hash, compare } from "bcrypt";
 import { generateToken } from "../utils/generateToken.js";
+import { COOKIE_NAME } from "../utils/constant.js";
 
 export const get_user = async (
   req: Request,
@@ -29,6 +30,25 @@ export const create_user = async (
     const hashedPassword = await hash(password, 10);
     const user = new userModel({ name, email, password: hashedPassword });
     await user.save();
+    //store cookie and generate  token
+
+    res.clearCookie(COOKIE_NAME, {
+      path: "/",
+      domain: "localhost",
+      httpOnly: true,
+      signed: true,
+    });
+
+    const token = generateToken(user._id.toString(), user.email, "7days");
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 7);
+    res.cookie(COOKIE_NAME, token, {
+      path: "/",
+      domain: "localhost",
+      expires,
+      httpOnly: true,
+      signed: true,
+    });
     return res.status(201).send({ msg: "User Created Successfully", user });
   } catch (error) {
     console.log(error);
@@ -49,10 +69,18 @@ export const login_user = async (
     const isPasswordCorrect = await compare(password, user.password);
     if (!isPasswordCorrect)
       return res.status(403).send({ msg: "Incorrect Password" });
+
+    res.clearCookie(COOKIE_NAME, {
+      path: "/",
+      domain: "localhost",
+      httpOnly: true,
+      signed: true,
+    });
+
     const token = generateToken(user._id.toString(), user.email, "7days");
     const expires = new Date();
     expires.setDate(expires.getDate() + 7);
-    res.cookie("auth_token", token, {
+    res.cookie(COOKIE_NAME, token, {
       path: "/",
       domain: "localhost",
       expires,
